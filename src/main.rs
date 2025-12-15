@@ -1,4 +1,4 @@
-use std::i8;
+use std::{any::Any, i8};
 
 use bevy::color::palettes::tailwind::*;
 use bevy::picking::pointer::PointerInteraction;
@@ -15,7 +15,8 @@ fn main() {
             Wireframe2dPlugin::default(),
         ))
         .add_systems(Startup, setup)
-        .run();
+        .insert_resource(TurnTracker { turn: SquareState::X })
+        .run(); 
 }
 
 fn setup(
@@ -69,10 +70,33 @@ fn setup(
     }
 }
 
+#[derive(Resource)]
+struct TurnTracker { turn: SquareState }
+
+// impl TurnTracker {
+//     fn next_turn(&mut self) {
+//         match self.turn {
+//             SquareState::X => { self.turn = SquareState::O; },
+//             SquareState::O => { self.turn = SquareState::X; },
+//             _ => { println!("Turn must be X or O"); }
+//         }
+//     }
+// }
+
 enum SquareState {
     Empty,
     X,
     O,
+}
+
+impl ToString for SquareState {
+    fn to_string(&self) -> String {
+        match self {
+            SquareState::Empty => String::from("Empty"),
+            SquareState::O => String::from("O"),
+            SquareState::X => String::from("X"),
+        }
+    }
 }
 
 #[derive(Component)]
@@ -96,25 +120,37 @@ fn add_symbol<E: EntityEvent>(
     o_shape: Handle<Mesh>,
     x_shape: Handle<Mesh>,
     mat: Handle<ColorMaterial>,
-) -> impl Fn(On<E>, Query<&mut BoardSquare>, Commands) {
-    move |event, mut query, mut commands| {
+) -> impl Fn(On<E>, Query<&mut BoardSquare>, ResMut<TurnTracker>, Commands) {
+    move |event, mut query, mut turn_tracker, mut commands| {
         if let Ok(mut board_square) = query.get_mut(event.event_target()) {
             match board_square.state {
                 SquareState::Empty => {
                     println!("Clicked Empty Square ");
-                    board_square.state = SquareState::X;
-                    commands.spawn((
-                        Mesh2d(x_shape.clone()),
-                        MeshMaterial2d(mat.clone()),
-                        Transform::from_xyz(board_square.x, board_square.y, 0.),
-                    ));
+                    match turn_tracker.turn {
+                        SquareState::X => {
+                            board_square.state = SquareState::X;
+                            commands.spawn((
+                                Mesh2d(x_shape.clone()),
+                                MeshMaterial2d(mat.clone()),
+                                Transform::from_xyz(board_square.x, board_square.y, 0.),
+                            )); 
+                            turn_tracker.turn = SquareState::O;
+                        },
+                        SquareState::O => {
+                            board_square.state = SquareState::O;
+                            commands.spawn((
+                                Mesh2d(o_shape.clone()),
+                                MeshMaterial2d(mat.clone()),
+                                Transform::from_xyz(board_square.x, board_square.y, 0.),
+                            )); 
+                            turn_tracker.turn = SquareState::X;
+                        },
+                        _ => {}
+                    }
+                    
                 }
-                SquareState::X => {
-                    println!("Clicked X Square");
-                }
-
                 _ => {
-                    println!("Square Clicked!")
+                    println!("Occupied {} Square Clicked!", board_square.state.to_string())
                 }
             }
         }
